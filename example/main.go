@@ -13,12 +13,28 @@ import (
 )
 
 func main() {
-	var wg sync.WaitGroup
+	srv := &gosmpp.Server{
+		Addr: "127.0.0.1:2775",
+		TLS:  nil,
+		Handler: func(p pdu.PDU) (res pdu.PDU, err error) {
+			switch pd := p.(type) {
+			case *pdu.SubmitSM:
+				fmt.Println("SubmitSM received from:", pd.SourceAddr, "to:", pd.DestAddr)
+				return pd.GetResponse(), nil
+			}
+			return pdu.NewEnquireLinkResp(), nil
+		},
+		Auth: &gosmpp.Auth{
+			SystemID: "client",
+			Password: "secret",
+		},
+	}
 
-	wg.Add(1)
-	go sendingAndReceiveSMS(&wg)
+	err := srv.Start()
 
-	wg.Wait()
+	if err != nil {
+		panic(err)
+	}
 }
 
 func sendingAndReceiveSMS(wg *sync.WaitGroup) {
