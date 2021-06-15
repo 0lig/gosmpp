@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -13,22 +14,33 @@ import (
 )
 
 func main() {
-	srv := &gosmpp.Server{
-		Addr: "127.0.0.1:2775",
-		TLS:  nil,
-		Handler: func(p pdu.PDU) (res pdu.PDU, err error) {
+	acc := gosmpp.ServerAccount{
+		Auth: &gosmpp.Auth{
+			SystemID: "client",
+			Password: "secret",
+		},
+		OnPDU: func(p pdu.PDU) (res pdu.PDU, err error) {
 			switch pd := p.(type) {
 			case *pdu.SubmitSM:
 				fmt.Println("SubmitSM received from:", pd.SourceAddr, "to:", pd.DestAddr)
 				return pd.GetResponse(), nil
 			}
-			return pdu.NewEnquireLinkResp(), nil
+			return nil, errors.New("unknown message type")
 		},
-		Auth: &gosmpp.Auth{
-			SystemID: "client",
-			Password: "secret",
+		OnReceiveError: func(err error) {
+			fmt.Println("receive error", err)
 		},
 	}
+
+	scfg := gosmpp.ServerSettings{
+		Address:  "127.0.0.1:2776",
+		Accounts: []gosmpp.ServerAccount{acc},
+		OnConnectionError: func(err error) {
+			fmt.Println("connection error", err)
+		},
+	}
+
+	srv := gosmpp.NewServer(scfg)
 
 	err := srv.Start()
 
