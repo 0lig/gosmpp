@@ -1,4 +1,4 @@
-module github.com/linxGnu/gosmpp
+module github.com/0lig/gosmpp
 
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
