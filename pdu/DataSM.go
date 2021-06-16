@@ -1,7 +1,7 @@
 package pdu
 
 import (
-	"github.com/0lig/gosmpp/data"
+	"github.com/dd1337/gosmpp/data"
 )
 
 // DataSM PDU is used to transfer data between the SMSC and the ESME.

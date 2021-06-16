@@ -1,7 +1,7 @@
 package pdu
 
 import (
-	"github.com/0lig/gosmpp/data"
+	"github.com/dd1337/gosmpp/data"
 )
 
 // UnsuccessSME indicates submission was unsuccessful and the respective errors.

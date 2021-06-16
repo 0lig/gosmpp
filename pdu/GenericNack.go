@@ -1,7 +1,7 @@
 package pdu
 
 import (
-	"github.com/0lig/gosmpp/data"
+	"github.com/dd1337/gosmpp/data"
 )
 
 // GenericNack PDU is a generic negative acknowledgement to an SMPP PDU submitted

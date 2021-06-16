@@ -8,9 +8,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/0lig/gosmpp"
-	"github.com/0lig/gosmpp/data"
-	"github.com/0lig/gosmpp/pdu"
+	"github.com/dd1337/gosmpp"
+	"github.com/dd1337/gosmpp/data"
+	"github.com/dd1337/gosmpp/pdu"
 )
 
 func main() {

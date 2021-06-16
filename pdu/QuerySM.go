@@ -1,7 +1,7 @@
 package pdu
 
 import (
-	"github.com/0lig/gosmpp/data"
+	"github.com/dd1337/gosmpp/data"
 )
 
 // QuerySM PDU is issued by the ESME to query the status of a previously submitted short message.

@@ -6,7 +6,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/0lig/gosmpp/pdu"
+	"github.com/dd1337/gosmpp/pdu"
 )
 
 type receivable struct {

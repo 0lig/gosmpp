@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/0lig/gosmpp/data"
+	"github.com/dd1337/gosmpp/data"
 
 	"github.com/stretchr/testify/require"
 )

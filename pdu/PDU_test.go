@@ -3,7 +3,7 @@ package pdu
 import (
 	"testing"
 
-	"github.com/0lig/gosmpp/errors"
+	"github.com/dd1337/gosmpp/errors"
 
 	"github.com/stretchr/testify/require"
 )

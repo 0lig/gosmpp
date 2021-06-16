@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"fmt"
 
-	"github.com/0lig/gosmpp/data"
+	"github.com/dd1337/gosmpp/data"
 )
 
 // For now, this package only support message uses of UDH for message concatenation

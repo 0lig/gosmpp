@@ -1,4 +1,4 @@
-module github.com/0lig/gosmpp
+module github.com/dd1337/gosmpp
 
 go 1.16
 

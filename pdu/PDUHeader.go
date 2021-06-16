@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"sync/atomic"
 
-	"github.com/0lig/gosmpp/data"
+	"github.com/dd1337/gosmpp/data"
 )
 
 func nextSequenceNumber(s *int32) (v int32) {

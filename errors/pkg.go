@@ -3,7 +3,7 @@ package errors
 import (
 	"fmt"
 
-	"github.com/0lig/gosmpp/data"
+	"github.com/dd1337/gosmpp/data"
 )
 
 // SmppErr indicates smpp error(s), compatible with OpenSMPP.
