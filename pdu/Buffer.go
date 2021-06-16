@@ -5,7 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	"github.com/linxGnu/gosmpp/data"
+	"github.com/0lig/gosmpp/data"
 )
 
 const (

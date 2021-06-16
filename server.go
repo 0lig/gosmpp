@@ -4,8 +4,8 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"github.com/linxGnu/gosmpp/data"
-	"github.com/linxGnu/gosmpp/pdu"
+	"github.com/0lig/gosmpp/data"
+	"github.com/0lig/gosmpp/pdu"
 	"net"
 )
 

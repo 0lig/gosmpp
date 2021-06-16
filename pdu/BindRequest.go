@@ -1,7 +1,7 @@
 package pdu
 
 import (
-	"github.com/linxGnu/gosmpp/data"
+	"github.com/0lig/gosmpp/data"
 )
 
 // BindingType indicates type of binding.

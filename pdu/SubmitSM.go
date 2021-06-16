@@ -1,7 +1,7 @@
 package pdu
 
 import (
-	"github.com/linxGnu/gosmpp/data"
+	"github.com/0lig/gosmpp/data"
 )
 
 // SubmitSM PDU is used by an ESME to submit a short message to the SMSC for onward

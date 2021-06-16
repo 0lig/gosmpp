@@ -3,7 +3,7 @@ package pdu
 import (
 	"fmt"
 
-	"github.com/linxGnu/gosmpp/data"
+	"github.com/0lig/gosmpp/data"
 )
 
 // AddressRange smpp address range of src and dst.
