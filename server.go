@@ -13,6 +13,7 @@ type ServerSettings struct {
 	Address           string
 	Accounts          []ServerAccount
 	OnConnectionError func(err error)
+	TLS               *tls.Config
 }
 
 type ServerAccount struct {
@@ -32,7 +33,7 @@ type Server struct {
 func NewServer(cfg ServerSettings) *Server {
 	s := &Server{
 		addr:  cfg.Address,
-		tls:   nil,
+		tls:   cfg.TLS,
 		accs:  cfg.Accounts,
 		conns: []*boundConnection{},
 	}
@@ -71,6 +72,8 @@ type boundConnection struct {
 	onReceiveError func(err error)
 }
 
+type systemId string
+
 func (s *Server) handleConn(conn net.Conn) {
 	fmt.Println("incoming connection", conn.RemoteAddr().String())
 	c := NewConnection(conn)
@@ -86,21 +89,20 @@ func (s *Server) handleConn(conn net.Conn) {
 		return
 	} else {
 		s.conns = append(s.conns, bc)
-		defer s.removeConnection(c)
-	}
-
-	err = bc.start()
-	defer bc.Close()
-
-	if err != nil {
-		fmt.Println("connection error", err)
-		return
+		defer s.removeConnection(c.systemID)
+		err = bc.start()
+		fmt.Printf("connection %s stopped reading\n", c.systemID)
+		defer bc.Close()
+		if err != nil {
+			fmt.Printf("connection %s error\n", c.systemID)
+			return
+		}
 	}
 }
 
-func (s *Server) removeConnection(conn *Connection) {
+func (s *Server) removeConnection(id string) {
 	for i, v := range s.conns {
-		if v.systemID == conn.systemID {
+		if v.systemID == id {
 			remove(s.conns, i)
 			return
 		}
@@ -112,14 +114,9 @@ func remove(s []*boundConnection, i int) []*boundConnection {
 	return s[:len(s)-1]
 }
 
-type systemId string
-
 func (s *Server) bindConnection(c *Connection) (bc *boundConnection, err error) {
 	fmt.Println("binding connection")
-	var (
-		p pdu.PDU
-	)
-
+	var p pdu.PDU
 	if p, err = pdu.Parse(c); err != nil {
 		return
 	}
@@ -171,9 +168,12 @@ func (c *boundConnection) start() error {
 		if err != nil {
 			return err
 		}
-		defr := handleDefault(p)
-		if defr != nil {
-			_, err = c.WritePDU(*defr)
+		defaultResponse, stop := handleDefault(p)
+		if stop {
+			break
+		}
+		if defaultResponse != nil {
+			_, err = c.WritePDU(*defaultResponse)
 
 			if err != nil {
 				c.onReceiveError(err)
@@ -195,16 +195,20 @@ func (c *boundConnection) start() error {
 			return err
 		}
 	}
+	return nil
 }
 
-func handleDefault(p pdu.PDU) (res *pdu.PDU) {
+func handleDefault(p pdu.PDU) (res *pdu.PDU, stop bool) {
 	switch pd := p.(type) {
 	case *pdu.EnquireLink:
 		r := pd.GetResponse()
-		return &r
+		res = &r
+		return
 	case *pdu.Unbind:
 		r := pd.GetResponse()
-		return &r
+		res = &r
+		stop = true
+		return
 	}
 	return
 }
