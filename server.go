@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/dd1337/gosmpp/data"
 	"github.com/dd1337/gosmpp/pdu"
+	"go.uber.org/zap"
 	"net"
 )
 
@@ -14,6 +15,7 @@ type ServerSettings struct {
 	Accounts          []ServerAccount
 	OnConnectionError func(err error)
 	TLS               *tls.Config
+	Logger            *zap.Logger
 }
 
 type ServerAccount struct {
@@ -28,6 +30,8 @@ type Server struct {
 
 	accs  []ServerAccount
 	conns []*boundConnection
+
+	log *zap.Logger
 }
 
 func NewServer(cfg ServerSettings) *Server {
@@ -36,6 +40,7 @@ func NewServer(cfg ServerSettings) *Server {
 		tls:   cfg.TLS,
 		accs:  cfg.Accounts,
 		conns: []*boundConnection{},
+		log:   cfg.Logger,
 	}
 	return s
 }
@@ -51,7 +56,7 @@ func (s *Server) getAccount(id string) (acc ServerAccount, err error) {
 }
 
 func (s *Server) Start() error {
-	fmt.Println("starting server on", s.addr)
+	s.log.Info("Starting server", zap.String("addr", s.addr))
 	l, err := net.Listen("tcp", s.addr)
 	if err != nil {
 		return err
@@ -70,12 +75,14 @@ type boundConnection struct {
 	*Connection
 	onPDU          func(p pdu.PDU) (res pdu.PDU, err error)
 	onReceiveError func(err error)
+	log            *zap.Logger
 }
 
 type systemId string
 
 func (s *Server) handleConn(conn net.Conn) {
-	fmt.Println("incoming connection", conn.RemoteAddr().String())
+	logAddr := zap.String("addr", conn.RemoteAddr().String())
+	s.log.Info("New connection", logAddr)
 	c := NewConnection(conn)
 
 	accs := map[systemId]Auth{}
@@ -85,18 +92,21 @@ func (s *Server) handleConn(conn net.Conn) {
 
 	bc, err := s.bindConnection(c)
 	if err != nil {
-		fmt.Println("bind error", err)
+		s.log.Error("Bind error", logAddr, zap.Error(err))
+		_ = conn.Close()
 		return
-	} else {
-		s.conns = append(s.conns, bc)
-		defer s.removeConnection(c.systemID)
-		err = bc.start()
-		fmt.Printf("connection %s stopped reading\n", c.systemID)
-		defer bc.Close()
-		if err != nil {
-			fmt.Printf("connection %s error\n", c.systemID)
-			return
-		}
+	}
+	logSysId := zap.String("systemId", bc.systemID)
+	s.log.Info("Connection bound", logAddr, logSysId)
+
+	s.conns = append(s.conns, bc)
+	defer s.removeConnection(c.systemID)
+	err = bc.startRead()
+	s.log.Info("Connection stopped reading", logAddr, logSysId)
+	defer bc.Close()
+	if err != nil {
+		s.log.Error("Connection error", logAddr, logSysId, zap.Error(err))
+		return
 	}
 }
 
@@ -115,7 +125,8 @@ func remove(s []*boundConnection, i int) []*boundConnection {
 }
 
 func (s *Server) bindConnection(c *Connection) (bc *boundConnection, err error) {
-	fmt.Println("binding connection")
+	logAddr := zap.String("addr", c.RemoteAddr().String())
+	s.log.Debug("Binding connection", logAddr)
 	var p pdu.PDU
 	if p, err = pdu.Parse(c); err != nil {
 		return
@@ -153,25 +164,29 @@ func (s *Server) bindConnection(c *Connection) (bc *boundConnection, err error) 
 				Connection:     c,
 				onPDU:          acc.OnPDU,
 				onReceiveError: acc.OnReceiveError,
+				log:            s.log,
 			}
 		}
 		return
 	}
 
+	err = errors.New("bind request expected but received something else")
+
 	return
 }
 
-func (c *boundConnection) start() error {
-	fmt.Println("starting read")
+func (c *boundConnection) startRead() error {
+	logAddr := zap.String("addr", c.conn.RemoteAddr().String())
+	logSysId := zap.String("systemId", c.systemID)
+
+	c.log.Debug("Starting read", logAddr, logSysId)
 	for {
 		p, err := pdu.Parse(c)
+		c.log.Debug("Incoming PDU", logAddr, logSysId)
 		if err != nil {
 			return err
 		}
 		defaultResponse, stop := handleDefault(p)
-		if stop {
-			break
-		}
 		if defaultResponse != nil {
 			_, err = c.WritePDU(*defaultResponse)
 
@@ -180,6 +195,11 @@ func (c *boundConnection) start() error {
 				return err
 			}
 			continue
+		}
+
+		if stop {
+			c.log.Debug("Unbind received, stopping read", logAddr, logSysId)
+			break
 		}
 
 		res, err := c.onPDU(p)
