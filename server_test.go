@@ -1,4 +1,4 @@
-package main
+package gosmpp
 
 import (
 	"fmt"
@@ -6,9 +6,9 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"testing"
 	"time"
 
-	"github.com/dd1337/gosmpp"
 	"github.com/dd1337/gosmpp/data"
 	"github.com/dd1337/gosmpp/pdu"
 )
@@ -23,7 +23,7 @@ const serverAddress = "127.0.0.1:2775"
 const serverUser = "test"
 const serverPassword = "quest"
 
-func main() {
+func TestServer(t *testing.T) {
 	var wg sync.WaitGroup
 
 	err := os.Setenv("SERVER_ADDR", serverAddress)
@@ -39,18 +39,32 @@ func main() {
 
 	wg.Wait()
 
+	requestCount := 0
+	respCount := 0
+	successRespCount := 0
 	for _, req := range tc.reqests {
+		requestCount++
 		for _, res := range tc.responses {
+			respCount++
 			if req.GetSequenceNumber() == res.GetSequenceNumber() {
+				successRespCount++
 				fmt.Println("seq nr:", req.GetSequenceNumber(), "success:", res.IsOk())
 			}
 		}
 	}
+
+	if requestCount > respCount {
+		t.Error("not enough responses")
+	}
+
+	if successRespCount < requestCount {
+		t.Error("not all responses successfult")
+	}
 }
 
-func getAccounts(tc *TestContext) []gosmpp.ServerAccount {
-	return []gosmpp.ServerAccount{{
-		Auth: &gosmpp.Auth{
+func getAccounts(tc *TestContext) []ServerAccount {
+	return []ServerAccount{{
+		Auth: &Auth{
 			SystemID: serverUser,
 			Password: serverPassword,
 		},
@@ -66,12 +80,12 @@ func getAccounts(tc *TestContext) []gosmpp.ServerAccount {
 	}}
 }
 
-func makeServerSettings(tc *TestContext) gosmpp.ServerSettings {
+func makeServerSettings(tc *TestContext) ServerSettings {
 	addr := os.Getenv("SERVER_ADDR")
 	if addr == "" {
 		panic("server address not defined")
 	}
-	return gosmpp.ServerSettings{
+	return ServerSettings{
 		Address:           addr,
 		Accounts:          getAccounts(tc),
 		OnConnectionError: handleConnectionError,
@@ -80,7 +94,7 @@ func makeServerSettings(tc *TestContext) gosmpp.ServerSettings {
 
 func StartServer(tc *TestContext) {
 	settings := makeServerSettings(tc)
-	srv := gosmpp.NewServer(settings)
+	srv := NewServer(settings)
 	srv.Start()
 }
 
@@ -101,16 +115,16 @@ func handleServerReceive(p pdu.PDU) (res pdu.PDU, err error) {
 func sendingAndReceiveSMS(wg *sync.WaitGroup) {
 	defer wg.Done()
 
-	auth := gosmpp.Auth{
+	auth := Auth{
 		SMSC:       serverAddress,
 		SystemID:   serverUser,
 		Password:   serverPassword,
 		SystemType: "",
 	}
 
-	trans, err := gosmpp.NewSession(
-		gosmpp.TRXConnector(gosmpp.NonTLSDialer, auth),
-		gosmpp.Settings{
+	trans, err := NewSession(
+		TRXConnector(NonTLSDialer, auth),
+		Settings{
 			EnquireLink: 5 * time.Second,
 
 			ReadTimeout: 10 * time.Second,
@@ -127,9 +141,9 @@ func sendingAndReceiveSMS(wg *sync.WaitGroup) {
 				fmt.Println("Rebinding but error:", err)
 			},
 
-			OnPDU: handlePDU(),
+			OnPDU: testHandlePDU(),
 
-			OnClosed: func(state gosmpp.State) {
+			OnClosed: func(state State) {
 				fmt.Println(state)
 			},
 		}, 5*time.Second)
@@ -142,14 +156,14 @@ func sendingAndReceiveSMS(wg *sync.WaitGroup) {
 
 	// sending SMS(s)
 	for i := 0; i < 5; i++ {
-		if err = trans.Transceiver().Submit(newSubmitSM()); err != nil {
+		if err = trans.Transceiver().Submit(testNewSubmitSM()); err != nil {
 			fmt.Println(err)
 		}
 		time.Sleep(time.Second)
 	}
 }
 
-func handlePDU() func(pdu.PDU, bool) {
+func testHandlePDU() func(pdu.PDU, bool) {
 	concatenated := map[uint8][]string{}
 	return func(p pdu.PDU, _ bool) {
 		switch pd := p.(type) {
@@ -191,7 +205,7 @@ func handlePDU() func(pdu.PDU, bool) {
 	}
 }
 
-func newSubmitSM() *pdu.SubmitSM {
+func testNewSubmitSM() *pdu.SubmitSM {
 	// build up submitSM
 	srcAddr := pdu.NewAddress()
 	srcAddr.SetTon(5)
