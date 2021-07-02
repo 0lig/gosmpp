@@ -3,8 +3,8 @@ package pdu
 import (
 	"sync/atomic"
 
-	"github.com/linxGnu/gosmpp/data"
-	"github.com/linxGnu/gosmpp/errors"
+	"github.com/dd1337/gosmpp/data"
+	"github.com/dd1337/gosmpp/errors"
 )
 
 var (

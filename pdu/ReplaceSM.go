@@ -1,7 +1,7 @@
 package pdu
 
 import (
-	"github.com/linxGnu/gosmpp/data"
+	"github.com/dd1337/gosmpp/data"
 )
 
 // ReplaceSM PDU is issued by the ESME to replace a previously submitted short message

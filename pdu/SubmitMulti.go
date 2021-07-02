@@ -1,7 +1,7 @@
 package pdu
 
 import (
-	"github.com/linxGnu/gosmpp/data"
+	"github.com/dd1337/gosmpp/data"
 )
 
 // SubmitMulti PDU is used to submit an SMPP message for delivery to multiple recipients

@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/linxGnu/gosmpp/pdu"
+	"github.com/dd1337/gosmpp/pdu"
 )
 
 var (
