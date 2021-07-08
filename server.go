@@ -57,7 +57,15 @@ func (s *Server) getAccount(id string) (acc ServerAccount, err error) {
 
 func (s *Server) Start() error {
 	s.log.Info("Starting server", zap.String("addr", s.addr))
-	l, err := net.Listen("tcp", s.addr)
+	var (
+		l   net.Listener
+		err error
+	)
+	if s.tls != nil {
+		l, err = tls.Listen("tcp", s.addr, s.tls)
+	} else {
+		l, err = net.Listen("tcp", s.addr)
+	}
 	if err != nil {
 		return err
 	}
