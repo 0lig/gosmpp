@@ -16,6 +16,7 @@ type ServerSettings struct {
 	OnConnectionError func(err error)
 	TLS               *tls.Config
 	Logger            *zap.Logger
+	WriteChan         chan pdu.PDU
 }
 
 type ServerAccount struct {
@@ -31,7 +32,8 @@ type Server struct {
 	accs  []ServerAccount
 	conns []*boundConnection
 
-	log *zap.Logger
+	log       *zap.Logger
+	writeChan chan pdu.PDU
 }
 
 func NewServer(cfg ServerSettings) *Server {
@@ -84,6 +86,7 @@ type boundConnection struct {
 	onPDU          func(p pdu.PDU) (res pdu.PDU, err error)
 	onReceiveError func(err error)
 	log            *zap.Logger
+	writeChan      chan pdu.PDU
 }
 
 type systemId string
@@ -109,6 +112,7 @@ func (s *Server) handleConn(conn net.Conn) {
 
 	s.conns = append(s.conns, bc)
 	defer s.removeConnection(c.systemID)
+	go bc.startWrite(s.writeChan)
 	err = bc.startRead()
 	s.log.Info("Connection stopped reading", logAddr, logSysId)
 	defer bc.Close()
@@ -181,6 +185,22 @@ func (s *Server) bindConnection(c *Connection) (bc *boundConnection, err error) 
 	err = errors.New("bind request expected but received something else")
 
 	return
+}
+
+func (c *boundConnection) startWrite(writeChan chan pdu.PDU) {
+	for {
+		select {
+		case p, ok := <-writeChan:
+			_, err := c.WritePDU(p)
+			if err != nil {
+				c.log.Error("Error writing to server", zap.Error(err))
+			}
+			if !ok {
+				c.log.Debug("Write channel closed")
+				return
+			}
+		}
+	}
 }
 
 func (c *boundConnection) startRead() error {
