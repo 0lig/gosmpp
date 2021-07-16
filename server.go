@@ -16,13 +16,13 @@ type ServerSettings struct {
 	OnConnectionError func(err error)
 	TLS               *tls.Config
 	Logger            *zap.Logger
-	WriteChan         chan pdu.PDU
 }
 
 type ServerAccount struct {
 	Auth           *Auth
 	OnPDU          func(p pdu.PDU) (res pdu.PDU, err error)
 	OnReceiveError func(err error)
+	WriteChan      chan pdu.PDU
 }
 
 type Server struct {
@@ -32,8 +32,7 @@ type Server struct {
 	accs  []ServerAccount
 	conns []*boundConnection
 
-	log       *zap.Logger
-	writeChan chan pdu.PDU
+	log *zap.Logger
 }
 
 func NewServer(cfg ServerSettings) *Server {
@@ -89,17 +88,10 @@ type boundConnection struct {
 	writeChan      chan pdu.PDU
 }
 
-type systemId string
-
 func (s *Server) handleConn(conn net.Conn) {
 	logAddr := zap.String("addr", conn.RemoteAddr().String())
 	s.log.Info("New connection", logAddr)
 	c := NewConnection(conn)
-
-	accs := map[systemId]Auth{}
-	for _, v := range s.accs {
-		accs[systemId(v.Auth.SystemID)] = *v.Auth
-	}
 
 	bc, err := s.bindConnection(c)
 	if err != nil {
@@ -112,7 +104,7 @@ func (s *Server) handleConn(conn net.Conn) {
 
 	s.conns = append(s.conns, bc)
 	defer s.removeConnection(c.systemID)
-	go bc.startWrite(s.writeChan)
+	go bc.startWrite()
 	err = bc.startRead()
 	s.log.Info("Connection stopped reading", logAddr, logSysId)
 	defer bc.Close()
@@ -177,6 +169,7 @@ func (s *Server) bindConnection(c *Connection) (bc *boundConnection, err error) 
 				onPDU:          acc.OnPDU,
 				onReceiveError: acc.OnReceiveError,
 				log:            s.log,
+				writeChan:      acc.WriteChan,
 			}
 		}
 		return
@@ -187,10 +180,13 @@ func (s *Server) bindConnection(c *Connection) (bc *boundConnection, err error) 
 	return
 }
 
-func (c *boundConnection) startWrite(writeChan chan pdu.PDU) {
+func (c *boundConnection) startWrite() {
+	if c.writeChan == nil {
+		c.log.Panic("Write chan not passed")
+	}
 	for {
 		select {
-		case p, ok := <-writeChan:
+		case p, ok := <-c.writeChan:
 			_, err := c.WritePDU(p)
 			if err != nil {
 				c.log.Error("Error writing to server", zap.Error(err))
