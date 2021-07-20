@@ -90,12 +90,12 @@ type boundConnection struct {
 
 func (s *Server) handleConn(conn net.Conn) {
 	logAddr := zap.String("addr", conn.RemoteAddr().String())
-	s.log.Info("New connection", logAddr)
+	s.log.Debug("Incoming connection", logAddr)
 	c := NewConnection(conn)
 
 	bc, err := s.bindConnection(c)
 	if err != nil {
-		s.log.Error("Bind error", logAddr, zap.Error(err))
+		s.log.Debug("Bind error", logAddr, zap.Error(err))
 		_ = conn.Close()
 		return
 	}
