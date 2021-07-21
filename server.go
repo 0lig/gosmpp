@@ -232,11 +232,13 @@ func (c *boundConnection) startRead() error {
 			return err
 		}
 
-		_, err = c.WritePDU(res)
+		if res != nil {
+			_, err = c.WritePDU(res)
 
-		if err != nil {
-			c.onReceiveError(err)
-			return err
+			if err != nil {
+				c.onReceiveError(err)
+				return err
+			}
 		}
 	}
 	return nil
