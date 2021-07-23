@@ -73,10 +73,11 @@ func (s *Server) Start() error {
 	for {
 		var c net.Conn
 		c, err = l.Accept()
-		if err != nil {
-			return err
+		if err == nil {
+			go s.handleConn(c)
+		} else {
+			s.log.Error(err.Error())
 		}
-		go s.handleConn(c)
 	}
 }
 
