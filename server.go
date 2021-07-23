@@ -8,6 +8,7 @@ import (
 	"github.com/dd1337/gosmpp/pdu"
 	"go.uber.org/zap"
 	"net"
+	"sync"
 )
 
 type ServerSettings struct {
@@ -22,10 +23,10 @@ type ServerAccount struct {
 	Auth           *Auth
 	OnPDU          func(p pdu.PDU) (res pdu.PDU, err error)
 	OnReceiveError func(err error)
-	WriteChan      chan pdu.PDU
 }
 
 type Server struct {
+	sync.RWMutex
 	addr string
 	tls  *tls.Config
 
@@ -33,15 +34,18 @@ type Server struct {
 	conns []*boundConnection
 
 	log *zap.Logger
+
+	writeChan chan pdu.PDU
 }
 
-func NewServer(cfg ServerSettings) *Server {
+func NewServer(cfg ServerSettings, writeChan chan pdu.PDU) *Server {
 	s := &Server{
-		addr:  cfg.Address,
-		tls:   cfg.TLS,
-		accs:  cfg.Accounts,
-		conns: []*boundConnection{},
-		log:   cfg.Logger,
+		addr:      cfg.Address,
+		tls:       cfg.TLS,
+		accs:      cfg.Accounts,
+		conns:     []*boundConnection{},
+		log:       cfg.Logger,
+		writeChan: writeChan,
 	}
 	return s
 }
@@ -70,6 +74,7 @@ func (s *Server) Start() error {
 	if err != nil {
 		return err
 	}
+	go s.startWrite()
 	for {
 		var c net.Conn
 		c, err = l.Accept()
@@ -86,7 +91,6 @@ type boundConnection struct {
 	onPDU          func(p pdu.PDU) (res pdu.PDU, err error)
 	onReceiveError func(err error)
 	log            *zap.Logger
-	writeChan      chan pdu.PDU
 }
 
 func (s *Server) handleConn(conn net.Conn) {
@@ -103,9 +107,16 @@ func (s *Server) handleConn(conn net.Conn) {
 	logSysId := zap.String("systemId", bc.systemID)
 	s.log.Info("Connection bound", logAddr, logSysId)
 
+	s.Lock()
 	s.conns = append(s.conns, bc)
-	defer s.removeConnection(c.systemID)
-	go bc.startWrite()
+	s.Unlock()
+
+	defer func() {
+		s.Lock()
+		s.removeConnection(c.systemID)
+		s.Unlock()
+	}()
+
 	err = bc.startRead()
 	s.log.Info("Connection stopped reading", logAddr, logSysId)
 	defer bc.Close()
@@ -118,15 +129,21 @@ func (s *Server) handleConn(conn net.Conn) {
 func (s *Server) removeConnection(id string) {
 	for i, v := range s.conns {
 		if v.systemID == id {
-			remove(s.conns, i)
+			s.conns = remove(s.conns, i)
+			fmt.Println("connections size", len(s.conns))
 			return
 		}
 	}
 }
 
 func remove(s []*boundConnection, i int) []*boundConnection {
-	s[len(s)-1], s[i] = s[i], s[len(s)-1]
-	return s[:len(s)-1]
+	if i == 0 {
+		return s[1:]
+	}
+	if i == len(s)-1 {
+		return s[:len(s)-1]
+	}
+	return append(s[:i-1], s[i:]...)
 }
 
 func (s *Server) bindConnection(c *Connection) (bc *boundConnection, err error) {
@@ -138,30 +155,34 @@ func (s *Server) bindConnection(c *Connection) (bc *boundConnection, err error) 
 	}
 
 	if req, ok := p.(*pdu.BindRequest); ok {
+		var bound bool
+		res := pdu.NewBindResp(*req)
+
 		var acc ServerAccount
 		acc, err = s.getAccount(req.SystemID)
 		if err != nil {
-			return
+			res.CommandStatus = data.ESME_RINVSYSID
 		}
 
-		res := pdu.NewBindResp(*req)
-		accPassword := acc.Auth.Password
-		var bound bool
-		if accPassword != "" {
-			if req.Password == accPassword {
+		if err == nil {
+			accPassword := acc.Auth.Password
+			if accPassword != "" {
+				if req.Password == accPassword {
+					acceptBind(c, req.SystemID, res)
+					bound = true
+				} else {
+					res.CommandStatus = data.ESME_RINVPASWD
+					err = errors.New("wrong password")
+				}
+			} else {
 				acceptBind(c, req.SystemID, res)
 				bound = true
-			} else {
-				res.CommandStatus = data.ESME_RINVPASWD
-				err = errors.New("wrong password")
 			}
-		} else {
-			acceptBind(c, req.SystemID, res)
-			bound = true
 		}
-		_, err = c.WritePDU(res)
-		if err != nil {
-			return
+
+		_, writeErr := c.WritePDU(res)
+		if writeErr != nil {
+			err = writeErr
 		}
 
 		if bound {
@@ -170,7 +191,6 @@ func (s *Server) bindConnection(c *Connection) (bc *boundConnection, err error) 
 				onPDU:          acc.OnPDU,
 				onReceiveError: acc.OnReceiveError,
 				log:            s.log,
-				writeChan:      acc.WriteChan,
 			}
 		}
 		return
@@ -181,19 +201,23 @@ func (s *Server) bindConnection(c *Connection) (bc *boundConnection, err error) 
 	return
 }
 
-func (c *boundConnection) startWrite() {
-	if c.writeChan == nil {
-		c.log.Panic("Write chan not passed")
+func (s *Server) startWrite() {
+	if s.writeChan == nil {
+		s.log.Panic("Write chan not passed")
 	}
 	for {
 		select {
-		case p, ok := <-c.writeChan:
-			_, err := c.WritePDU(p)
-			if err != nil {
-				c.log.Error("Error writing to server", zap.Error(err))
+		case p, ok := <-s.writeChan:
+			for _, c := range s.conns {
+				_, err := c.WritePDU(p)
+
+				if err != nil {
+					c.log.Error("Error writing to client", zap.Error(err))
+				}
 			}
+
 			if !ok {
-				c.log.Debug("Write channel closed")
+				s.log.Debug("Write channel closed")
 				return
 			}
 		}
