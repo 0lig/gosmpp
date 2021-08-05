@@ -23,6 +23,8 @@ const (
 	HEBREWCoding byte = 0x07
 	// UCS2Coding is UCS2 coding
 	UCS2Coding byte = 0x08
+	// USIM specific coding
+	USIMCoding byte = 0xf6
 )
 
 // EncDec wraps encoder and decoder interface.
@@ -208,6 +210,20 @@ func (*ucs2) ShouldSplit(text string, octetLimit uint) (shouldSplit bool) {
 	return uint(len(text)*2) > octetLimit
 }
 
+type usim struct{}
+
+func (u usim) DataCoding() byte {
+	return USIMCoding
+}
+
+func (u usim) Encode(str string) ([]byte, error) {
+	return []byte(str), nil
+}
+
+func (u usim) Decode(bytes []byte) (string, error) {
+	return string(bytes), nil
+}
+
 func (c *ucs2) EncodeSplit(text string, octetLimit uint) (allSeg [][]byte, err error) {
 	if octetLimit < 64 {
 		octetLimit = 134
@@ -267,6 +283,8 @@ var (
 
 	// UCS2 encoding.
 	UCS2 Encoding = &ucs2{}
+
+	USIM Encoding = &usim{}
 )
 
 var codingMap = map[byte]Encoding{
@@ -278,6 +296,7 @@ var codingMap = map[byte]Encoding{
 	CYRILLICCoding:    CYRILLIC,
 	HEBREWCoding:      HEBREW,
 	UCS2Coding:        UCS2,
+	USIMCoding:        USIM,
 }
 
 // FromDataCoding returns encoding from DataCoding value.
