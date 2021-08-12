@@ -127,7 +127,6 @@ func (t *receivable) handleOrClose(p pdu.PDU) (closing bool) {
 		default:
 			var responded bool
 			if p.CanResponse() && t.settings.response != nil {
-				t.settings.response(p.GetResponse())
 				responded = true
 			}
 
