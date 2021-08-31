@@ -64,5 +64,7 @@ type Settings struct {
 	// OnClosed notifies `closed` event due to State.
 	OnClosed ClosedCallback
 
+	DefaultResponse bool
+
 	response func(pdu.PDU)
 }
