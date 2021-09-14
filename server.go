@@ -12,8 +12,7 @@ import (
 )
 
 type ServerSettings struct {
-	Address string
-	// todo use database instead
+	Address           string
 	Accounts          []ServerAccount
 	OnConnectionError func(err error)
 	TLS               *tls.Config
