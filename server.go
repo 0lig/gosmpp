@@ -12,7 +12,8 @@ import (
 )
 
 type ServerSettings struct {
-	Address           string
+	Address string
+	// todo use database instead
 	Accounts          []ServerAccount
 	OnConnectionError func(err error)
 	TLS               *tls.Config
@@ -21,7 +22,7 @@ type ServerSettings struct {
 
 type ServerAccount struct {
 	Auth           *Auth
-	OnPDU          func(p pdu.PDU) (res pdu.PDU, err error)
+	OnPDU          func(sysId string, p pdu.PDU) (res pdu.PDU, err error)
 	OnReceiveError func(err error)
 }
 
@@ -34,18 +35,15 @@ type Server struct {
 	conns []*boundConnection
 
 	log *zap.Logger
-
-	writeChan chan pdu.PDU
 }
 
-func NewServer(cfg ServerSettings, writeChan chan pdu.PDU) *Server {
+func NewServer(cfg ServerSettings) *Server {
 	s := &Server{
-		addr:      cfg.Address,
-		tls:       cfg.TLS,
-		accs:      cfg.Accounts,
-		conns:     []*boundConnection{},
-		log:       cfg.Logger,
-		writeChan: writeChan,
+		addr:  cfg.Address,
+		tls:   cfg.TLS,
+		accs:  cfg.Accounts,
+		conns: []*boundConnection{},
+		log:   cfg.Logger,
 	}
 	return s
 }
@@ -74,7 +72,6 @@ func (s *Server) Start() error {
 	if err != nil {
 		return err
 	}
-	go s.startWrite()
 	for {
 		var c net.Conn
 		c, err = l.Accept()
@@ -88,7 +85,7 @@ func (s *Server) Start() error {
 
 type boundConnection struct {
 	*Connection
-	onPDU          func(p pdu.PDU) (res pdu.PDU, err error)
+	onPDU          func(sysId string, p pdu.PDU) (res pdu.PDU, err error)
 	onReceiveError func(err error)
 	log            *zap.Logger
 }
@@ -127,8 +124,8 @@ func (s *Server) handleConn(conn net.Conn) {
 }
 
 func (s *Server) removeConnection(id string) {
-	for i, v := range s.conns {
-		if v.systemID == id {
+	for i, c := range s.conns {
+		if c.systemID == id {
 			s.conns = remove(s.conns, i)
 			fmt.Println("connections size", len(s.conns))
 			return
@@ -201,27 +198,17 @@ func (s *Server) bindConnection(c *Connection) (bc *boundConnection, err error) 
 	return
 }
 
-func (s *Server) startWrite() {
-	if s.writeChan == nil {
-		s.log.Panic("Write chan not passed")
-	}
-	for {
-		select {
-		case p, ok := <-s.writeChan:
-			for _, c := range s.conns {
-				_, err := c.WritePDU(p)
-
-				if err != nil {
-					c.log.Error("Error writing to client", zap.Error(err))
-				}
+func (s *Server) Write(sysId string, p pdu.PDU) error {
+	for _, c := range s.conns {
+		if c.systemID == sysId {
+			_, err := c.WritePDU(p)
+			if err != nil {
+				return err
 			}
-
-			if !ok {
-				s.log.Debug("Write channel closed")
-				return
-			}
+			return nil
 		}
 	}
+	return errors.New("no connections with systemId=" + sysId)
 }
 
 func (c *boundConnection) startRead() error {
@@ -251,7 +238,7 @@ func (c *boundConnection) startRead() error {
 			break
 		}
 
-		res, err := c.onPDU(p)
+		res, err := c.onPDU(c.systemID, p)
 		if err != nil {
 			c.onReceiveError(err)
 			return err
