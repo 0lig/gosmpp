@@ -1,7 +1,6 @@
 package pdu
 
 import (
-	"fmt"
 	"github.com/dd1337/gosmpp/data"
 	"github.com/dd1337/gosmpp/errors"
 	"io"
@@ -196,9 +195,6 @@ func Parse(r io.Reader) (pdu PDU, err error) {
 			_, _ = buf.Write(bodyBytes)
 		}
 		err = pdu.Unmarshal(buf)
-		if err != nil && err.Error() == "Not enough byte to read from buffer" {
-			fmt.Println("error caught")
-		}
 	}
 
 	return
