@@ -1,10 +1,10 @@
 package pdu
 
 import (
-	"io"
-
 	"github.com/dd1337/gosmpp/data"
 	"github.com/dd1337/gosmpp/errors"
+	"io"
+	"io/ioutil"
 )
 
 // PDU represents PDU interface.
@@ -83,17 +83,25 @@ func (c *base) unmarshal(b *ByteBuffer, bodyReader func(*ByteBuffer) error) (err
 				return
 			}
 
-			// have optional body?
-			if got < cmdLength {
-
-				// the rest is optional body
-				var optionalBody []byte
-				if optionalBody, err = b.ReadN(cmdLength - got); err == nil {
-					err = c.unmarshalOptionalBody(optionalBody)
-				}
-
+			skipOptionalBody := c.CommandID == data.SUBMIT_SM_RESP && !c.IsOk()
+			if skipOptionalBody {
+				_, err = io.Copy(ioutil.Discard, b)
 				if err != nil {
 					return
+				}
+			} else {
+				// have optional body?
+				if got < cmdLength {
+
+					// the rest is optional body
+					var optionalBody []byte
+					if optionalBody, err = b.ReadN(cmdLength - got); err == nil {
+						err = c.unmarshalOptionalBody(optionalBody)
+					}
+
+					if err != nil {
+						return
+					}
 				}
 			}
 
